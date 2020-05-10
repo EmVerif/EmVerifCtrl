@@ -154,6 +154,7 @@ static void ctrl_set_can_send_data(
 	{
 		memcpy(out_can_info_p->can_send_data, ctrl_param.can_send_data, sizeof(ctrl_can_format_st) * CAN_MAX_FIFO_NUM);
 	}
+	ctrl_param.can_send_num = 0;
 }
 
 static void ctrl_set_can_status_to_pc(
