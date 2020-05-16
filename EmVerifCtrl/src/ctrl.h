@@ -2,7 +2,7 @@
 
 #include "typedefine.h"
 
-#define IF_VERSION					( 0u )
+#define IF_VERSION					( 1u )
 
 #define SAMPLING_KHZ				( 5u )
 
@@ -18,7 +18,6 @@
 
 #define CAN_MAX_FIFO_NUM			( 8u )
 
-#define SPI_HW_NUM					( 2u )
 #define SPI_MAX_DATA_NUM			( 160u )
 
 #define USER_DATA_TO_PC_BYTE_NUM	( 1280u )
@@ -67,6 +66,16 @@ typedef struct {
 } ctrl_spi_info_st;
 
 typedef struct {
+	// Warning:
+	// 1. Should not add or delete member variables.
+	// 2. Should not reorder member variables.
+	// 3. Should not rewrite constant data.
+	// 1cycle = 33.333333 / 128[MHz]
+	ui16_t numerator_cycle;
+	ui16_t denominator_cycle;
+} ctrl_square_wave_info_st;
+
+typedef struct {
 	// TODO:
 	// 1. User setting.
 	// Warning:
@@ -109,6 +118,8 @@ typedef struct {
 	float from_through_out_to_mix_out_gain[MIX_OUT_CH_NUM][THROUGH_OUT_CH_NUM];			// 288[B]
 	ui8_t from_in_to_mix_out_delay_smp[MIX_OUT_CH_NUM][IN_CH_NUM];						// 36[B]
 	ui8_t from_through_out_to_mix_out_delay_smp[MIX_OUT_CH_NUM][THROUGH_OUT_CH_NUM];	// 72[B]
+	ui16_t square_wave_numerator_cycle;													// 2[B]
+	ui16_t square_wave_denominator_cycle;												// 2[B]
 } ctrl_user_data_from_pc_st;
 
 typedef union {
@@ -125,10 +136,11 @@ typedef struct {
 	// 3. Should not rewrite const data.
 	ctrl_user_data_to_pc_ut user_data_to_pc;
 	const ctrl_user_data_from_pc_ut user_data_from_pc;
-	const ui16_t ad_val[SAMPLING_KHZ][AD_CH_NUM];
-	ui16_t pwm_val[SAMPLING_KHZ][PWM_CH_NUM];
-	ctrl_can_info_st can_info;
-	ctrl_spi_info_st spi_info[SPI_HW_NUM];
+	const ui16_t ad_val[SAMPLING_KHZ][AD_CH_NUM];	// P01_08, P01_09, P01_10, P01_11, P01_12, P01_13
+	ui16_t pwm_val[SAMPLING_KHZ][PWM_CH_NUM];		// P05_00, P05_01, P05_05, P05_07, P08_14, P08_15
+	ctrl_can_info_st can_info;						// TX: P6_05, RX: P6_04
+	ctrl_spi_info_st spi_info;						// CLK: P10_12, MISO: P10_15, MOSI: P10_14, CS: P10_13
+	ctrl_square_wave_info_st square_wave_info;		// P04_04
 	const bool user_data_from_pc_valid;
 	const bool first_flag;
 } ctrl_io_data_st;

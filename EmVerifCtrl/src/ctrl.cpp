@@ -122,6 +122,14 @@ static void ctrl_set_pwm(
 	}
 }
 
+static void ctrl_set_square_wave(
+	ctrl_square_wave_info_st* out_square_wave_info_p
+)
+{
+	out_square_wave_info_p->numerator_cycle = ctrl_param.square_wave_numerator_cycle;
+	out_square_wave_info_p->denominator_cycle = ctrl_param.square_wave_denominator_cycle;
+}
+
 static void ctrl_set_spi_send_data(
 	const ui16_t in_through_out_val[SAMPLING_KHZ][THROUGH_OUT_CH_NUM],
 	ctrl_spi_info_st* out_spi_info_p
@@ -219,9 +227,12 @@ void ctrl_generate_data( const ui32_t in_if_version, ctrl_io_data_st* io_data_p 
 			mix_out_val,
 			io_data_p->pwm_val
 		);
+		ctrl_set_square_wave(
+			&io_data_p->square_wave_info
+		);
 		ctrl_set_spi_send_data(
 			through_out_val,
-			&io_data_p->spi_info[0]
+			&io_data_p->spi_info
 		);
 		ctrl_set_can_send_data(
 			&io_data_p->can_info
