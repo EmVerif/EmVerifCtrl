@@ -4,21 +4,18 @@
 
 #define IF_VERSION					( 1u )
 
-#define SAMPLING_KHZ				( 5u )
+#define SAMPLING_KHZ				( 10u )
 
 #define GP_CH_NUM					( 12u )
 #define AD_CH_NUM					( 6u )
 #define PWM_CH_NUM					( 6u )
 
-#define NOISE_BASE_NUM				( 3u )
+#define SPI_MAX_DATA_NUM			( 160u )
 
-#define IN_CH_NUM					( AD_CH_NUM )
-#define MIX_OUT_CH_NUM				( PWM_CH_NUM )
-#define THROUGH_OUT_CH_NUM			( 12u )
+#define SPIOUT_CH_NUM			    ( 12u )
+#define SINE_BASE_NUM				( 3u )
 
 #define CAN_MAX_FIFO_NUM			( 8u )
-
-#define SPI_MAX_DATA_NUM			( 160u )
 
 #define USER_DATA_TO_PC_BYTE_NUM	( 1280u )
 #define USER_DATA_FROM_PC_BYTE_NUM	( 1280u )
@@ -90,9 +87,9 @@ typedef struct {
 
 	ui32_t timestamp;											// 4[B]
 
-	ui16_t in_val[SAMPLING_KHZ][IN_CH_NUM];						// 60[B]
-	ui16_t mix_out_val[SAMPLING_KHZ][MIX_OUT_CH_NUM];			// 60[B]
-	ui16_t through_out_val[SAMPLING_KHZ][THROUGH_OUT_CH_NUM];	// 120[B]
+	ui16_t ad_val[SAMPLING_KHZ][AD_CH_NUM];						// 120[B]
+	ui16_t pwm_val[SAMPLING_KHZ][PWM_CH_NUM];					// 120[B]
+	ui16_t spiout_val[SAMPLING_KHZ][SPIOUT_CH_NUM];				// 240[B]
 } ctrl_user_data_to_pc_st;
 
 typedef union {
@@ -102,24 +99,51 @@ typedef union {
 	ui8_t user_byte_data[USER_DATA_TO_PC_BYTE_NUM];
 } ctrl_user_data_to_pc_ut;
 
+typedef enum {
+	CTRL_USER_DATA_FROM_PC_0,
+	CTRL_USER_DATA_FROM_PC_1
+} ctrl_user_data_from_pc_type_et;
+
+typedef struct {
+	ctrl_can_format_st can_send_data[CAN_MAX_FIFO_NUM];									// 128[B]
+	ui32_t can_send_num;																// 4[B]
+
+	float pwm_sine_hz[PWM_CH_NUM][SINE_BASE_NUM];										// 72[B]
+	float pwm_sine_gain[PWM_CH_NUM][SINE_BASE_NUM];										// 72[B]
+	float pwm_sine_phase[PWM_CH_NUM][SINE_BASE_NUM];									// 72[B]
+	float pwm_white_noise_gain[PWM_CH_NUM];												// 24[B]
+
+	float spiout_sine_hz[SPIOUT_CH_NUM][SINE_BASE_NUM];									// 144[B]
+	float spiout_sine_gain[SPIOUT_CH_NUM][SINE_BASE_NUM];								// 144[B]
+	float spiout_sine_phase[SPIOUT_CH_NUM][SINE_BASE_NUM];								// 144[B]
+	float spiout_white_noise_gain[SPIOUT_CH_NUM];										// 48[B]
+
+	ui16_t square_wave_numerator_cycle;													// 2[B]
+	ui16_t square_wave_denominator_cycle;												// 2[B]
+} ctrl_user_data_from_pc_0_st;
+
+typedef struct {
+	float from_ad_to_pwm_gain[PWM_CH_NUM][AD_CH_NUM];									// 144[B]
+	float from_spiout_to_pwm_gain[PWM_CH_NUM][SPIOUT_CH_NUM];							// 288[B]
+	float from_ad_to_spiout_gain[SPIOUT_CH_NUM][AD_CH_NUM];								// 288[B]
+
+	ui8_t from_ad_to_pwm_delay_smp[PWM_CH_NUM][AD_CH_NUM];								// 36[B]
+	ui8_t from_spiout_to_pwm_delay_smp[PWM_CH_NUM][SPIOUT_CH_NUM];						// 72[B]
+	ui8_t from_ad_to_spiout_delay_smp[SPIOUT_CH_NUM][AD_CH_NUM];						// 72[B]
+} ctrl_user_data_from_pc_1_st;
+
+typedef union {
+	ctrl_user_data_from_pc_0_st user_data_0;											// 856[B]
+	ctrl_user_data_from_pc_1_st user_data_1;											// 900[B]
+} ctrl_user_data_from_pc_type_ut;
+
 typedef struct {
 	// TODO:
 	// 1. User setting.
 	// Warning:
 	// 1. Should not define member variables over max byte size. Max byte size is USER_DATA_FROM_PC_BYTE_NUM.
-	ctrl_can_format_st can_send_data[CAN_MAX_FIFO_NUM];									// 128[B]
-	ui32_t can_send_num;																// 4[B]
-
-	float sine_hz[THROUGH_OUT_CH_NUM][NOISE_BASE_NUM];									// 144[B]
-	float sine_gain[THROUGH_OUT_CH_NUM][NOISE_BASE_NUM];								// 144[B]
-	float sine_phase[THROUGH_OUT_CH_NUM][NOISE_BASE_NUM];								// 144[B]
-	float white_noise_gain[THROUGH_OUT_CH_NUM];											// 48[B]
-	float from_in_to_mix_out_gain[MIX_OUT_CH_NUM][IN_CH_NUM];							// 144[B]
-	float from_through_out_to_mix_out_gain[MIX_OUT_CH_NUM][THROUGH_OUT_CH_NUM];			// 288[B]
-	ui8_t from_in_to_mix_out_delay_smp[MIX_OUT_CH_NUM][IN_CH_NUM];						// 36[B]
-	ui8_t from_through_out_to_mix_out_delay_smp[MIX_OUT_CH_NUM][THROUGH_OUT_CH_NUM];	// 72[B]
-	ui16_t square_wave_numerator_cycle;													// 2[B]
-	ui16_t square_wave_denominator_cycle;												// 2[B]
+	ctrl_user_data_from_pc_type_et type;												// 4[B]
+	ctrl_user_data_from_pc_type_ut user_union_data;										// 900[B]
 } ctrl_user_data_from_pc_st;
 
 typedef union {
