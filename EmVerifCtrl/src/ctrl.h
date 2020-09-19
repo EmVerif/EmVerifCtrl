@@ -2,7 +2,7 @@
 
 #include "typedefine.h"
 
-#define IF_VERSION					( 1u )
+#define IF_VERSION					( 2u )
 
 #define SAMPLING_KHZ				( 10u )
 
@@ -165,6 +165,7 @@ typedef struct {
 	ctrl_can_info_st can_info;						// TX: P6_05, RX: P6_04
 	ctrl_spi_info_st spi_info;						// CLK: P10_12, MISO: P10_15, MOSI: P10_14, CS: P10_13
 	ctrl_square_wave_info_st square_wave_info;		// P04_04
+	ui8_t gpio_val;									// P03_08, P03_09, P03_10, P03_11, P03_12, P03_13, P03_14, P03_15
 	const bool user_data_from_pc_valid;
 	const bool first_flag;
 } ctrl_io_data_st;
