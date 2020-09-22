@@ -14,11 +14,21 @@ static ui32_t ctrl_timestamp;
 static const float ctrl_pi = 3.14159265358979323846;
 static const float ctrl_phase_step_per_hz = ( 2.0 * ctrl_pi ) / SAMPLING_KHZ / 1000;
 
+static float ctrl_ad_delay_buf[MAX_DELAY_SMP][AD_CH_NUM];
+static float ctrl_spiout_delay_buf[MAX_DELAY_SMP][SPIOUT_CH_NUM];
+static ui16_t ctrl_delay_buf_wpt;
+
+static ui16_t ctrl_random_x[SAMPLING_KHZ];
+static ui16_t ctrl_random_c;
+
+static float ctrl_fw_delay_buf[AD_CH_NUM];
+static float ctrl_fb_delay_buf[AD_CH_NUM];
 
 static void ctrl_init( void )
 {
 	memset( (void*)&ctrl_user_data_from_pc_0, 0, sizeof(ctrl_user_data_from_pc_0) );
 	memset( (void*)&ctrl_user_data_from_pc_1, 0, sizeof(ctrl_user_data_from_pc_1) );
+
 	for( ui32_t idx = 0; idx < SINE_BASE_NUM; idx++ )
 	{
 		for( ui32_t ch = 0; ch < PWM_CH_NUM; ch++ )
@@ -30,7 +40,20 @@ static void ctrl_init( void )
 			ctrl_spiout_sine_current_phase[ch][idx] = 0.0;
 		}
 	}
-	ctrl_timestamp = 0;
+	ctrl_timestamp = 0u;
+
+	memset( (void*)&ctrl_ad_delay_buf[0][0], 0, sizeof(ctrl_ad_delay_buf) );
+	memset( (void*)&ctrl_spiout_delay_buf[0][0], 0, sizeof(ctrl_spiout_delay_buf) );
+	ctrl_delay_buf_wpt = 0u;
+
+	ctrl_random_x[SAMPLING_KHZ - 1u] = 1u;
+	ctrl_random_c = 1u;
+
+	for( ui32_t ch = 0; ch < AD_CH_NUM; ch++ )
+	{
+		ctrl_fw_delay_buf[ch] = 0.0;
+		ctrl_fb_delay_buf[ch] = 0.0;
+	}
 }
 
 static void ctrl_copy_param( ctrl_io_data_st* io_data_p )
@@ -51,145 +74,269 @@ static void ctrl_copy_param( ctrl_io_data_st* io_data_p )
 	}
 }
 
-static void ctrl_generate_pwm_sine( ui16_t out_pwm_sine[SAMPLING_KHZ][PWM_CH_NUM] )
+static void ctrl_generate_random( void )
 {
-	si32_t sine;
+	ui32_t x = ctrl_random_x[SAMPLING_KHZ - 1u];
+	ui32_t c = ctrl_random_c;
+
+	for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
+	{
+		ui32_t tmp = ( 31743u * x ) + c;
+
+		x = (ui16_t)( tmp % 65536 );
+		c = (ui16_t)( tmp / 65536 );
+		ctrl_random_x[smp] = x;
+	}
+	ctrl_random_c = c;
+}
+
+static void ctrl_generate_pwm_base_signal( float out_pwm_base_signal[SAMPLING_KHZ][PWM_CH_NUM] )
+{
+	float base_signal;
 
 	for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
 	{
 		for( ui32_t ch = 0; ch < PWM_CH_NUM; ch++ )
 		{
-			sine = 0;
+			base_signal = 0.0;
 			for( ui32_t idx = 0; idx < SINE_BASE_NUM; idx++ )
 			{
-				sine += 32768 * sin( ctrl_pwm_sine_current_phase[ch][idx] + ctrl_user_data_from_pc_0.pwm_sine_phase[ch][idx] ) * ctrl_user_data_from_pc_0.pwm_sine_gain[ch][idx];
+				base_signal += 32768 * sin( ctrl_pwm_sine_current_phase[ch][idx] + ctrl_user_data_from_pc_0.pwm_sine_phase[ch][idx] ) * ctrl_user_data_from_pc_0.pwm_sine_gain[ch][idx];
 				ctrl_pwm_sine_current_phase[ch][idx] += ( ctrl_user_data_from_pc_0.pwm_sine_hz[ch][idx] * ctrl_phase_step_per_hz );
 				if( ctrl_pwm_sine_current_phase[ch][idx] >= ( 2 * ctrl_pi ) )
 				{
 					ctrl_pwm_sine_current_phase[ch][idx] -= ( 2 * ctrl_pi );
 				}
 			}
-			if( sine > 32767 )
-			{
-				sine = 65535;
-			}
-			else if( sine < -32768 )
-			{
-				sine = 0;
-			}
-			else
-			{
-				sine += 32768;
-			}
-			out_pwm_sine[smp][ch] = (ui16_t)sine;
+			base_signal += ( ctrl_random_x[smp] - 32768 ) * ctrl_user_data_from_pc_0.pwm_white_noise_gain[ch];
+			out_pwm_base_signal[smp][ch] = base_signal;
 		}
 	}
 }
 
-static void ctrl_generate_spiout_sine( ui16_t out_spiout_sine[SAMPLING_KHZ][SPIOUT_CH_NUM] )
+static void ctrl_generate_spiout_base_signal( float out_spiout_base_signal[SAMPLING_KHZ][SPIOUT_CH_NUM] )
 {
-	si32_t sine;
+	float base_signal;
 
 	for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
 	{
 		for( ui32_t ch = 0; ch < SPIOUT_CH_NUM; ch++ )
 		{
-			sine = 0;
+			base_signal = 0.0;
 			for( ui32_t idx = 0; idx < SINE_BASE_NUM; idx++ )
 			{
-				sine += 32768 * sin( ctrl_spiout_sine_current_phase[ch][idx] + ctrl_user_data_from_pc_0.spiout_sine_phase[ch][idx] ) * ctrl_user_data_from_pc_0.spiout_sine_gain[ch][idx];
+				base_signal += 32768 * sin( ctrl_spiout_sine_current_phase[ch][idx] + ctrl_user_data_from_pc_0.spiout_sine_phase[ch][idx] ) * ctrl_user_data_from_pc_0.spiout_sine_gain[ch][idx];
 				ctrl_spiout_sine_current_phase[ch][idx] += ( ctrl_user_data_from_pc_0.spiout_sine_hz[ch][idx] * ctrl_phase_step_per_hz );
 				if( ctrl_spiout_sine_current_phase[ch][idx] >= ( 2 * ctrl_pi ) )
 				{
 					ctrl_spiout_sine_current_phase[ch][idx] -= ( 2 * ctrl_pi );
 				}
 			}
-			if( sine > 32767 )
-			{
-				sine = 65535;
-			}
-			else if( sine < -32768 )
-			{
-				sine = 0;
-			}
-			else
-			{
-				sine += 32768;
-			}
-			out_spiout_sine[smp][ch] = (ui16_t)sine;
+			base_signal += ( ctrl_random_x[smp] - 32768 ) * ctrl_user_data_from_pc_0.spiout_white_noise_gain[ch];
+			out_spiout_base_signal[smp][ch] = base_signal;
 		}
 	}
 }
 
-static void ctrl_generate_pwm_val(
+static void ctrl_adapt_hpf(
 	const ui16_t in_ad_val[SAMPLING_KHZ][AD_CH_NUM],
-	const ui16_t in_spiout_sine[SAMPLING_KHZ][SPIOUT_CH_NUM],
-	const ui16_t in_pwm_sine[SAMPLING_KHZ][PWM_CH_NUM],
-	ui16_t out_pwm_val[SAMPLING_KHZ][PWM_CH_NUM]
+	float out_ad_val_dccut[SAMPLING_KHZ][AD_CH_NUM],
+	ui16_t out_ad_val_dccut_for_send[SAMPLING_KHZ][AD_CH_NUM]
 )
 {
-	si32_t val;
+	if( ctrl_user_data_from_pc_1.dc_cut_flag != 0u )
+	{
+		for( si32_t ch = 0; ch < AD_CH_NUM; ch++ )
+		{
+			float in_ad;
+			float out_ad;
+			float prev_in_ad = ctrl_fw_delay_buf[ch];
+			float prev_out_ad = ctrl_fb_delay_buf[ch];
+
+			for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
+			{
+				ui16_t out_ad_for_send;
+
+				in_ad = ( (si32_t)in_ad_val[smp][ch] - 32768 );
+				out_ad = in_ad;
+				out_ad -= prev_in_ad;
+				out_ad += 0.9999 * prev_out_ad;
+				out_ad_val_dccut[smp][ch] = out_ad;
+				if( out_ad > 32767 )
+				{
+					out_ad_for_send = 65535;
+				}
+				else if( out_ad < -32768 )
+				{
+					out_ad_for_send = 0;
+				}
+				else
+				{
+					out_ad_for_send = (ui16_t)( out_ad + 32768 );
+				}
+				out_ad_val_dccut_for_send[smp][ch] = out_ad_for_send;
+				prev_in_ad = in_ad;
+				prev_out_ad = out_ad;
+			}
+			ctrl_fw_delay_buf[ch] = in_ad;
+			ctrl_fb_delay_buf[ch] = out_ad;
+		}
+	}
+	else
+	{
+		for( si32_t ch = 0; ch < AD_CH_NUM; ch++ )
+		{
+			for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
+			{
+				out_ad_val_dccut[smp][ch] = ( (si32_t)in_ad_val[smp][ch] - 32768 );
+				out_ad_val_dccut_for_send[smp][ch] = in_ad_val[smp][ch];
+			}
+			ctrl_fw_delay_buf[ch] = out_ad_val_dccut[SAMPLING_KHZ - 1][ch];
+			ctrl_fb_delay_buf[ch] = out_ad_val_dccut[SAMPLING_KHZ - 1][ch];
+		}
+	}
+}
+
+static void ctrl_set_delay_buf(
+	const float in_ad_val[SAMPLING_KHZ][AD_CH_NUM],
+	const float in_spiout_base_signal[SAMPLING_KHZ][SPIOUT_CH_NUM]
+)
+{
+	for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
+	{
+		for( si32_t ch = 0; ch < AD_CH_NUM; ch++ )
+		{
+			ctrl_ad_delay_buf[ctrl_delay_buf_wpt][ch] = in_ad_val[smp][ch];
+		}
+		for( si32_t ch = 0; ch < SPIOUT_CH_NUM; ch++ )
+		{
+			ctrl_spiout_delay_buf[ctrl_delay_buf_wpt][ch] = in_spiout_base_signal[smp][ch];
+		}
+		ctrl_delay_buf_wpt++;
+		if( ctrl_delay_buf_wpt >= MAX_DELAY_SMP )
+		{
+			ctrl_delay_buf_wpt = 0u;
+		}
+	}
+}
+
+static void ctrl_get_delay_buf(
+	float out_ad_to_pwm_signal[SAMPLING_KHZ][PWM_CH_NUM][AD_CH_NUM],
+	float out_ad_to_spiout_signal[SAMPLING_KHZ][SPIOUT_CH_NUM][AD_CH_NUM],
+	float out_spiout_to_pwm_signal[SAMPLING_KHZ][PWM_CH_NUM][SPIOUT_CH_NUM]
+)
+{
+	si32_t rd_pt;
+	si32_t rd_init_pt = (si32_t)ctrl_delay_buf_wpt - SAMPLING_KHZ;
+
+	for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
+	{
+		for( si32_t from_ch = 0; from_ch < AD_CH_NUM; from_ch++ )
+		{
+			for( si32_t to_ch = 0; to_ch < PWM_CH_NUM; to_ch++ )
+			{
+				rd_pt = rd_init_pt - (si32_t)ctrl_user_data_from_pc_1.from_ad_to_pwm_delay_smp[to_ch][from_ch];
+				if( rd_pt < 0 )
+				{
+					rd_pt += MAX_DELAY_SMP;
+				}
+				out_ad_to_pwm_signal[smp][to_ch][from_ch] = ctrl_ad_delay_buf[rd_pt][from_ch];
+			}
+			for( si32_t to_ch = 0; to_ch < SPIOUT_CH_NUM; to_ch++ )
+			{
+				rd_pt = rd_init_pt - (si32_t)ctrl_user_data_from_pc_1.from_ad_to_spiout_delay_smp[to_ch][from_ch];
+				if( rd_pt < 0 )
+				{
+					rd_pt += MAX_DELAY_SMP;
+				}
+				out_ad_to_spiout_signal[smp][to_ch][from_ch] = ctrl_ad_delay_buf[rd_pt][from_ch];
+			}
+		}
+		for( si32_t from_ch = 0; from_ch < SPIOUT_CH_NUM; from_ch++ )
+		{
+			for( si32_t to_ch = 0; to_ch < PWM_CH_NUM; to_ch++ )
+			{
+				rd_pt = rd_init_pt - (si32_t)ctrl_user_data_from_pc_1.from_spiout_to_pwm_delay_smp[to_ch][from_ch];
+				if( rd_pt < 0 )
+				{
+					rd_pt += MAX_DELAY_SMP;
+				}
+				out_spiout_to_pwm_signal[smp][to_ch][from_ch] = ctrl_spiout_delay_buf[rd_pt][from_ch];
+			}
+		}
+		rd_init_pt++;
+	}
+}
+
+static void ctrl_generate_pwm_signal(
+	const float in_ad_to_pwm_signal[SAMPLING_KHZ][PWM_CH_NUM][AD_CH_NUM],
+	const float in_spiout_to_pwm_signal[SAMPLING_KHZ][PWM_CH_NUM][SPIOUT_CH_NUM],
+	const float in_pwm_base_signal[SAMPLING_KHZ][PWM_CH_NUM],
+	ui16_t out_pwm_signal[SAMPLING_KHZ][PWM_CH_NUM]
+)
+{
+	float signal;
 
 	for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
 	{
 		for( ui32_t to_ch = 0; to_ch < PWM_CH_NUM; to_ch++ )
 		{
-			val = in_pwm_sine[smp][to_ch] - 32768;
+			signal = in_pwm_base_signal[smp][to_ch];
 			for( ui32_t from_ch = 0; from_ch < AD_CH_NUM; from_ch++ )
 			{
-				val += ( in_ad_val[smp][from_ch] - 32768 ) * ctrl_user_data_from_pc_1.from_ad_to_pwm_gain[to_ch][from_ch];
+				signal += in_ad_to_pwm_signal[smp][to_ch][from_ch] * ctrl_user_data_from_pc_1.from_ad_to_pwm_gain[to_ch][from_ch];
 			}
 			for( ui32_t from_ch = 0; from_ch < SPIOUT_CH_NUM; from_ch++ )
 			{
-				val += ( in_spiout_sine[smp][from_ch] - 32768 ) * ctrl_user_data_from_pc_1.from_spiout_to_pwm_gain[to_ch][from_ch];
+				signal += in_spiout_to_pwm_signal[smp][to_ch][from_ch] * ctrl_user_data_from_pc_1.from_spiout_to_pwm_gain[to_ch][from_ch];
 			}
-			if( val > 32767 )
+			if( signal > 32767 )
 			{
-				val = 65535;
+				signal = 65535;
 			}
-			else if( val < -32768 )
+			else if( signal < -32768 )
 			{
-				val = 0;
+				signal = 0;
 			}
 			else
 			{
-				val += 32768;
+				signal += 32768;
 			}
-			out_pwm_val[smp][to_ch] = (ui16_t)val;
+			out_pwm_signal[smp][to_ch] = (ui16_t)signal;
 		}
 	}
 }
 
 static void ctrl_generate_spiout_val(
-	const ui16_t in_ad_val[SAMPLING_KHZ][AD_CH_NUM],
-	const ui16_t in_spiout_sine[SAMPLING_KHZ][SPIOUT_CH_NUM],
-	ui16_t out_spiout_val[SAMPLING_KHZ][SPIOUT_CH_NUM]
+	const float in_ad_to_spiout_signal[SAMPLING_KHZ][SPIOUT_CH_NUM][AD_CH_NUM],
+	const float in_spiout_base_signal[SAMPLING_KHZ][SPIOUT_CH_NUM],
+	ui16_t out_spiout_signal[SAMPLING_KHZ][SPIOUT_CH_NUM]
 )
 {
-	si32_t val;
+	float signal;
 
 	for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
 	{
 		for( ui32_t to_ch = 0; to_ch < SPIOUT_CH_NUM; to_ch++ )
 		{
-			val = in_spiout_sine[smp][to_ch] - 32768;
+			signal = in_spiout_base_signal[smp][to_ch];
 			for( ui32_t from_ch = 0; from_ch < AD_CH_NUM; from_ch++ )
 			{
-				val += ( in_ad_val[smp][from_ch] - 32768 ) * ctrl_user_data_from_pc_1.from_ad_to_spiout_gain[to_ch][from_ch];
+				signal += in_ad_to_spiout_signal[smp][to_ch][from_ch] * ctrl_user_data_from_pc_1.from_ad_to_spiout_gain[to_ch][from_ch];
 			}
-			if( val > 32767 )
+			if( signal > 32767 )
 			{
-				val = 65535;
+				signal = 65535;
 			}
-			else if( val < -32768 )
+			else if( signal < -32768 )
 			{
-				val = 0;
+				signal = 0;
 			}
 			else
 			{
-				val += 32768;
+				signal += 32768;
 			}
-			out_spiout_val[smp][to_ch] = (ui16_t)val;
+			out_spiout_signal[smp][to_ch] = (ui16_t)signal;
 		}
 	}
 }
@@ -269,8 +416,15 @@ static void ctrl_set_can_status_to_pc(
 extern "C" void ctrl_generate_data( const ui32_t in_if_version, ctrl_io_data_st* io_data_p ) __attribute((section("TOP")));
 void ctrl_generate_data( const ui32_t in_if_version, ctrl_io_data_st* io_data_p )
 {
-	ui16_t spiout_sine[SAMPLING_KHZ][SPIOUT_CH_NUM];
-	ui16_t pwm_sine[SAMPLING_KHZ][PWM_CH_NUM];
+	float pwm_base_signal[SAMPLING_KHZ][PWM_CH_NUM];
+	float spiout_base_signal[SAMPLING_KHZ][SPIOUT_CH_NUM];
+	float ad_dccut_signal[SAMPLING_KHZ][AD_CH_NUM];
+	ui16_t ad_dccut_val_for_send[SAMPLING_KHZ][AD_CH_NUM];
+
+	float ad_to_pwm_signal[SAMPLING_KHZ][PWM_CH_NUM][AD_CH_NUM];
+	float ad_to_spiout_signal[SAMPLING_KHZ][SPIOUT_CH_NUM][AD_CH_NUM];
+	float spiout_to_pwm_signal[SAMPLING_KHZ][PWM_CH_NUM][SPIOUT_CH_NUM];
+
 	ui16_t spiout_val[SAMPLING_KHZ][SPIOUT_CH_NUM];
 
 	if( in_if_version != IF_VERSION )
@@ -284,11 +438,18 @@ void ctrl_generate_data( const ui32_t in_if_version, ctrl_io_data_st* io_data_p 
 	else
 	{
 		ctrl_copy_param( io_data_p );
-		ctrl_generate_pwm_sine( pwm_sine );
-		ctrl_generate_spiout_sine( spiout_sine );
-		ctrl_generate_pwm_val( io_data_p->ad_val, spiout_sine, pwm_sine, io_data_p->pwm_val );
-		ctrl_generate_spiout_val( io_data_p->ad_val, spiout_sine, spiout_val );
+		ctrl_generate_random();
+		ctrl_generate_pwm_base_signal( pwm_base_signal );
+		ctrl_generate_spiout_base_signal( spiout_base_signal );
+		ctrl_adapt_hpf( io_data_p->ad_val, ad_dccut_signal, ad_dccut_val_for_send );
 
+		ctrl_set_delay_buf( ad_dccut_signal, spiout_base_signal );
+		ctrl_get_delay_buf( ad_to_pwm_signal, ad_to_spiout_signal, spiout_to_pwm_signal );
+
+		ctrl_generate_pwm_signal( ad_to_pwm_signal, spiout_to_pwm_signal, pwm_base_signal, io_data_p->pwm_val );
+		ctrl_generate_spiout_val( ad_to_spiout_signal, spiout_base_signal, spiout_val );
+
+		io_data_p->gpio_val = ctrl_user_data_from_pc_0.port_out_val;
 		ctrl_set_square_wave(
 			&io_data_p->square_wave_info
 		);
@@ -300,7 +461,7 @@ void ctrl_generate_data( const ui32_t in_if_version, ctrl_io_data_st* io_data_p 
 			&io_data_p->can_info
 		);
 		io_data_p->user_data_to_pc.user_struct_data.timestamp = ctrl_timestamp;
-		memcpy( io_data_p->user_data_to_pc.user_struct_data.ad_val, io_data_p->ad_val, sizeof(io_data_p->ad_val) );
+		memcpy( io_data_p->user_data_to_pc.user_struct_data.ad_val, ad_dccut_val_for_send, sizeof(ad_dccut_val_for_send) );
 		memcpy( io_data_p->user_data_to_pc.user_struct_data.pwm_val, io_data_p->pwm_val, sizeof(io_data_p->pwm_val) );
 		memcpy( io_data_p->user_data_to_pc.user_struct_data.spiout_val, spiout_val, sizeof(spiout_val) );
 		ctrl_set_can_status_to_pc(
