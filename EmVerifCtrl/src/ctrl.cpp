@@ -18,7 +18,9 @@ static float ctrl_ad_delay_buf[MAX_DELAY_SMP][AD_CH_NUM];
 static float ctrl_spiout_delay_buf[MAX_DELAY_SMP][SPIOUT_CH_NUM];
 static ui16_t ctrl_delay_buf_wpt;
 
-static ui16_t ctrl_random_x[SAMPLING_KHZ];
+static ui16_t ctrl_pwm_random[SAMPLING_KHZ][PWM_CH_NUM];
+static ui16_t ctrl_spiout_random[SAMPLING_KHZ][SPIOUT_CH_NUM];
+static ui16_t ctrl_random_x;
 static ui16_t ctrl_random_c;
 
 static float ctrl_fw_delay_buf[AD_CH_NUM];
@@ -46,7 +48,7 @@ static void ctrl_init( void )
 	memset( (void*)&ctrl_spiout_delay_buf[0][0], 0, sizeof(ctrl_spiout_delay_buf) );
 	ctrl_delay_buf_wpt = 0u;
 
-	ctrl_random_x[SAMPLING_KHZ - 1u] = 1u;
+	ctrl_random_x = 1u;
 	ctrl_random_c = 1u;
 
 	for( ui32_t ch = 0; ch < AD_CH_NUM; ch++ )
@@ -76,17 +78,29 @@ static void ctrl_copy_param( ctrl_io_data_st* io_data_p )
 
 static void ctrl_generate_random( void )
 {
-	ui32_t x = ctrl_random_x[SAMPLING_KHZ - 1u];
+	ui32_t x = ctrl_random_x;
 	ui32_t c = ctrl_random_c;
 
 	for( si32_t smp = 0; smp < SAMPLING_KHZ; smp++ )
 	{
-		ui32_t tmp = ( 31743u * x ) + c;
+		for( si32_t ch = 0; ch < PWM_CH_NUM; ch++ )
+		{
+			ui32_t tmp = ( 31743u * x ) + c;
 
-		x = (ui16_t)( tmp % 65536 );
-		c = (ui16_t)( tmp / 65536 );
-		ctrl_random_x[smp] = x;
+			x = (ui16_t)( tmp % 65536 );
+			c = (ui16_t)( tmp / 65536 );
+			ctrl_pwm_random[smp][ch] = x;
+		}
+		for( si32_t ch = 0; ch < SPIOUT_CH_NUM; ch++ )
+		{
+			ui32_t tmp = ( 31743u * x ) + c;
+
+			x = (ui16_t)( tmp % 65536 );
+			c = (ui16_t)( tmp / 65536 );
+			ctrl_spiout_random[smp][ch] = x;
+		}
 	}
+	ctrl_random_x = x;
 	ctrl_random_c = c;
 }
 
@@ -108,7 +122,7 @@ static void ctrl_generate_pwm_base_signal( float out_pwm_base_signal[SAMPLING_KH
 					ctrl_pwm_sine_current_phase[ch][idx] -= ( 2 * ctrl_pi );
 				}
 			}
-			base_signal += ( ctrl_random_x[smp] - 32768 ) * ctrl_user_data_from_pc_0.pwm_white_noise_gain[ch];
+			base_signal += ( ctrl_pwm_random[smp][ch] - 32768 ) * ctrl_user_data_from_pc_0.pwm_white_noise_gain[ch];
 			out_pwm_base_signal[smp][ch] = base_signal;
 		}
 	}
@@ -132,7 +146,7 @@ static void ctrl_generate_spiout_base_signal( float out_spiout_base_signal[SAMPL
 					ctrl_spiout_sine_current_phase[ch][idx] -= ( 2 * ctrl_pi );
 				}
 			}
-			base_signal += ( ctrl_random_x[smp] - 32768 ) * ctrl_user_data_from_pc_0.spiout_white_noise_gain[ch];
+			base_signal += ( ctrl_spiout_random[smp][ch] - 32768 ) * ctrl_user_data_from_pc_0.spiout_white_noise_gain[ch];
 			out_spiout_base_signal[smp][ch] = base_signal;
 		}
 	}
