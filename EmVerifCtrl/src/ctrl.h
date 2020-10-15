@@ -2,7 +2,7 @@
 
 #include "typedefine.h"
 
-#define IF_VERSION					( 2u )
+#define IF_VERSION					( 3u )
 
 #define SAMPLING_KHZ				( 10u )
 
@@ -40,10 +40,9 @@ typedef struct {
 	// 3. Should not rewrite constant data.
 	const bool enable;
 	const ctrl_can_format_st can_recv_data[CAN_MAX_FIFO_NUM];
-	const ctrl_can_format_st can_send_fin_data[CAN_MAX_FIFO_NUM];
+	const bool can_sendfin_flag[CAN_MAX_FIFO_NUM];
 	ctrl_can_format_st can_send_data[CAN_MAX_FIFO_NUM];
 	const ui32_t recv_num;
-	const ui32_t send_fin_num;
 	const ui32_t send_possible_num;
 	ui32_t send_request_num;
 	const ui32_t cerror;
@@ -80,9 +79,8 @@ typedef struct {
 	// Warning:
 	// 1. Should not define member variables over max byte size. Max byte size is USER_DATA_TO_PC_BYTE_NUM.
 	ctrl_can_format_st can_recv_data[CAN_MAX_FIFO_NUM];			// 128[B]
-	ctrl_can_format_st can_send_fin_data[CAN_MAX_FIFO_NUM];		// 128[B]
+	bool can_sendfin_flag[CAN_MAX_FIFO_NUM];					// 8[B]
 	ui32_t can_recv_num;										// 4[B]
-	ui32_t can_send_fin_num;									// 4[B]
 	ui32_t can_send_possible_num;								// 4[B]
 	ui32_t cerror;												// 4[B]
 	ui32_t cstatus;												// 4[B]

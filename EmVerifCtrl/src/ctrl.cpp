@@ -401,16 +401,14 @@ static void ctrl_set_can_send_data(
 static void ctrl_set_can_status_to_pc(
 	const ctrl_can_info_st* in_can_info_p,
 	ctrl_can_format_st out_recv_data_p[CAN_MAX_FIFO_NUM],
-	ctrl_can_format_st out_send_fin_data_p[CAN_MAX_FIFO_NUM],
+	bool out_sendfin_flag_p[CAN_MAX_FIFO_NUM],
 	ui32_t* out_recv_num_p,
-	ui32_t* out_send_fin_num_p,
 	ui32_t* out_send_possible_num_p,
 	ui32_t* out_cerror_p,
 	ui32_t* out_cstatus_p
 )
 {
 	*out_recv_num_p = in_can_info_p->recv_num;
-	*out_send_fin_num_p = in_can_info_p->send_fin_num;
 	if( in_can_info_p->send_possible_num > ctrl_user_data_from_pc_0.can_send_num )
 	{
 		*out_send_possible_num_p = in_can_info_p->send_possible_num - ctrl_user_data_from_pc_0.can_send_num;
@@ -422,7 +420,7 @@ static void ctrl_set_can_status_to_pc(
 	*out_cerror_p = in_can_info_p->cerror;
 	*out_cstatus_p = in_can_info_p->cstatus;
 	memcpy( out_recv_data_p, in_can_info_p->can_recv_data, sizeof(ctrl_can_format_st) * CAN_MAX_FIFO_NUM );
-	memcpy( out_send_fin_data_p, in_can_info_p->can_send_fin_data, sizeof(ctrl_can_format_st) * CAN_MAX_FIFO_NUM );
+	memcpy( out_sendfin_flag_p, in_can_info_p->can_sendfin_flag, sizeof(bool) * CAN_MAX_FIFO_NUM );
 }
 
 // Warning:
@@ -481,9 +479,8 @@ void ctrl_generate_data( const ui32_t in_if_version, ctrl_io_data_st* io_data_p 
 		ctrl_set_can_status_to_pc(
 			&io_data_p->can_info,
 			io_data_p->user_data_to_pc.user_struct_data.can_recv_data,
-			io_data_p->user_data_to_pc.user_struct_data.can_send_fin_data,
+			io_data_p->user_data_to_pc.user_struct_data.can_sendfin_flag,
 			&io_data_p->user_data_to_pc.user_struct_data.can_recv_num,
-			&io_data_p->user_data_to_pc.user_struct_data.can_send_fin_num,
 			&io_data_p->user_data_to_pc.user_struct_data.can_send_possible_num,
 			&io_data_p->user_data_to_pc.user_struct_data.cerror,
 			&io_data_p->user_data_to_pc.user_struct_data.cstatus
