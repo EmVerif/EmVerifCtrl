@@ -2,7 +2,7 @@
 
 #include "typedefine.h"
 
-#define IF_VERSION					( 3u )
+#define IF_VERSION					( 4u )
 
 #define SAMPLING_KHZ				( 10u )
 
@@ -11,6 +11,8 @@
 #define PWM_CH_NUM					( 6u )
 
 #define SPI_MAX_DATA_NUM			( 160u )
+
+#define I2C_MAX_DATA_NUM			( 160u )
 
 #define SPIOUT_CH_NUM			    ( 12u )
 #define SINE_BASE_NUM				( 3u )
@@ -62,6 +64,21 @@ typedef struct {
 	const ui32_t recv_size[SAMPLING_KHZ];
 	const ui32_t recv_buf[SPI_MAX_DATA_NUM];
 } ctrl_spi_info_st;
+
+typedef struct {
+	// Warning:
+	// 1. Should not add or delete member variables.
+	// 2. Should not reorder member variables.
+	// 3. Should not rewrite constant data.
+	const bool enable;
+	const bool busy_flag;
+	const bool error_flag;
+	bool access_req;
+	bool is_read;
+	ui8_t addr;
+	ui32_t access_num;
+	ui8_t access_buf[I2C_MAX_DATA_NUM];
+} ctrl_i2c_info_st;
 
 typedef struct {
 	// Warning:
@@ -168,6 +185,7 @@ typedef struct {
 	ui16_t pwm_val[SAMPLING_KHZ][PWM_CH_NUM];		// P05_00, P05_01, P05_05, P05_07, P08_14, P08_15
 	ctrl_can_info_st can_info;						// TX: P06_05, RX: P06_04
 	ctrl_spi_info_st spi_info;						// CLK: P10_12, MISO: P10_15, MOSI: P10_14, CS: P10_13
+	ctrl_i2c_info_st i2c_info;						// SCL: P01_02, SDA: P01_03
 	ctrl_square_wave_info_st square_wave_info;		// P04_04
 	ui8_t gpio_val;									// P03_08, P03_09, P03_10, P03_11, P03_12, P03_13, P03_14, P03_15
 	const bool user_data_from_pc_valid;
