@@ -395,7 +395,6 @@ static void ctrl_set_can_send_data(
 {
 	out_can_info_p->send_request_num = ctrl_user_data_from_pc_0.can_send_num;
 	memcpy( out_can_info_p->can_send_data, ctrl_user_data_from_pc_0.can_send_data, sizeof(ctrl_can_format_st) * CAN_MAX_FIFO_NUM );
-	ctrl_user_data_from_pc_0.can_send_num = 0;
 }
 
 static void ctrl_set_can_status_to_pc(
@@ -417,6 +416,7 @@ static void ctrl_set_can_status_to_pc(
 	{
 		*out_send_possible_num_p = 0u;
 	}
+	ctrl_user_data_from_pc_0.can_send_num = 0;
 	*out_cerror_p = in_can_info_p->cerror;
 	*out_cstatus_p = in_can_info_p->cstatus;
 	memcpy( out_recv_data_p, in_can_info_p->can_recv_data, sizeof(ctrl_can_format_st) * CAN_MAX_FIFO_NUM );
