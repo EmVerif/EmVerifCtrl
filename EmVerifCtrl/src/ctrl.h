@@ -101,6 +101,7 @@ typedef struct {
 	ui32_t can_send_possible_num;								// 4[B]
 	ui32_t cerror;												// 4[B]
 	ui32_t cstatus;												// 4[B]
+	ui32_t can_total_send_num;									// 4[B]
 
 	ui32_t timestamp;											// 4[B]
 

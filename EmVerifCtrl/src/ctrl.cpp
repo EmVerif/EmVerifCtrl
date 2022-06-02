@@ -6,6 +6,7 @@
 // TODO: Sample program
 static ctrl_user_data_from_pc_0_st ctrl_user_data_from_pc_0;
 static ctrl_user_data_from_pc_1_st ctrl_user_data_from_pc_1;
+static ui32_t ctrl_can_total_send_num;
 
 static float ctrl_pwm_sine_current_phase[PWM_CH_NUM][SINE_BASE_NUM];
 static float ctrl_spiout_sine_current_phase[SPIOUT_CH_NUM][SINE_BASE_NUM];
@@ -30,6 +31,7 @@ static void ctrl_init( void )
 {
 	memset( (void*)&ctrl_user_data_from_pc_0, 0, sizeof(ctrl_user_data_from_pc_0) );
 	memset( (void*)&ctrl_user_data_from_pc_1, 0, sizeof(ctrl_user_data_from_pc_1) );
+	ctrl_can_total_send_num = 0;
 
 	for( ui32_t idx = 0; idx < SINE_BASE_NUM; idx++ )
 	{
@@ -395,6 +397,7 @@ static void ctrl_set_can_send_data(
 {
 	out_can_info_p->send_request_num = ctrl_user_data_from_pc_0.can_send_num;
 	memcpy( out_can_info_p->can_send_data, ctrl_user_data_from_pc_0.can_send_data, sizeof(ctrl_can_format_st) * CAN_MAX_FIFO_NUM );
+	ctrl_can_total_send_num += ctrl_user_data_from_pc_0.can_send_num;
 }
 
 static void ctrl_set_can_status_to_pc(
@@ -485,6 +488,7 @@ void ctrl_generate_data( const ui32_t in_if_version, ctrl_io_data_st* io_data_p 
 			&io_data_p->user_data_to_pc.user_struct_data.cerror,
 			&io_data_p->user_data_to_pc.user_struct_data.cstatus
 		);
+		io_data_p->user_data_to_pc.user_struct_data.can_total_send_num = ctrl_can_total_send_num;
 	}
 	ctrl_timestamp++;
 }
